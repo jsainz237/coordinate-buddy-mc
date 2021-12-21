@@ -1,0 +1,9 @@
+{
+    "required": true,
+    "package": "com.jsainz.coordinate.buddy.mixins",
+    "mixins": [],
+    "client": [],
+    "server": [
+        "PlayerEntityMixin"
+    ]
+}

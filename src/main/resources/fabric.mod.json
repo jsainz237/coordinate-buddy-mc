@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "cb",
+  "version": "1.0.0",
+
+  "name": "Coordinate Buddy",
+  "description": "All about the Coordinates baby!!!",
+  "authors": [
+    "jsainz",
+    "DisortedChicken"
+  ],
+  "contact": {
+    "homepage": "",
+    "sources": ""
+  },
+
+  "license": "CC0-1.0",
+  "icon": "assets/cb/icon.png",
+
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.jsainz.coordinate.buddy.CoordinateBuddy"
+    ]
+  },
+  "mixins": [
+    "cb.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=0.11.3",
+    "fabric": "*",
+    "minecraft": "1.18.x",
+    "java": ">=17"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
