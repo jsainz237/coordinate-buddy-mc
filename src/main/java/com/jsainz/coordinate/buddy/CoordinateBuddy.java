@@ -3,12 +3,13 @@ package com.jsainz.coordinate.buddy;
 import com.jsainz.coordinate.buddy.utils.CBCommand;
 import com.jsainz.coordinate.buddy.utils.PlayerEntityExt;
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.MessageType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -17,8 +18,10 @@ import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Direction;
 
+import java.util.Collection;
 import java.util.EnumSet;
-import java.util.List;
+
+import static com.mojang.brigadier.builder.RequiredArgumentBuilder.argument;
 
 public class CoordinateBuddy implements ModInitializer {
 
@@ -30,7 +33,6 @@ public class CoordinateBuddy implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
             LiteralCommandNode<ServerCommandSource> cbCommand = CommandManager
                     .literal(TOP_LEVEL_COMMAND)
-                    .executes(ctx -> showCommands(ctx.getSource()))
                     .build();
 
             LiteralCommandNode<ServerCommandSource> meCommand = CBCommand.me.builder
@@ -38,7 +40,7 @@ public class CoordinateBuddy implements ModInitializer {
                     .build();
 
             LiteralCommandNode<ServerCommandSource> helpCommand = CBCommand.help.builder
-                    .executes(ctx -> showCommands(ctx.getSource()))
+                    .executes(ctx -> showCommands(cbCommand, dispatcher, ctx.getSource()))
                     .build();
 
             LiteralCommandNode<ServerCommandSource> setHomeCommand = CBCommand.setHome.builder
@@ -46,6 +48,7 @@ public class CoordinateBuddy implements ModInitializer {
                     .build();
 
             LiteralCommandNode<ServerCommandSource> getHomeCommand = CBCommand.getHome.builder
+                    .then(argument("player", EntityArgumentType.players()))
                     .executes(ctx -> getPlayerHomeCoordinates(ctx.getSource()))
                     .build();
 
@@ -92,19 +95,23 @@ public class CoordinateBuddy implements ModInitializer {
      * @return Success Integer
      * @throws CommandSyntaxException
      */
-    public static int showCommands(ServerCommandSource source) throws CommandSyntaxException {
-        String listStr = "";
-        CBCommand[] commandList = CBCommand.values();
-        for(int i = 0; i < commandList.length; i++) {
-            CBCommand command = commandList[i];
-            listStr += "/cb " + command.name + " - " + command.description;
-
-            if(i != commandList.length - 1) {
-                listStr += "\n";
+    public static int showCommands(
+        LiteralCommandNode<ServerCommandSource> node,
+        CommandDispatcher<ServerCommandSource> dispatcher,
+        ServerCommandSource source
+    ) throws CommandSyntaxException {
+        final Collection<String> commandList = dispatcher.getSmartUsage(node, source).values();
+        String text = "\nCoordinate Buddy :)\n";
+        for (int i = 0; i < commandList.size(); i++) {
+            text += "/cb " + commandList.toArray()[i];
+            if(i != commandList.size() - 1) {
+                text += "\n";
             }
         }
 
-        source.getPlayer().sendMessage(new LiteralText(listStr), false);
+        final ServerPlayerEntity player = source.getPlayer();
+        player.sendMessage(new LiteralText(text), false);
+
         return Command.SINGLE_SUCCESS;
     }
 
@@ -118,7 +125,7 @@ public class CoordinateBuddy implements ModInitializer {
 
             final String coords = getPlayerCoords(source);
             ((PlayerEntityExt) player).setHomeCoordinates(coords);
-            player.sendMessage(new LiteralText("Home coordinates set! - " + coords), false);
+            player.sendMessage(new LiteralText("Home coordinates set: " + coords), false);
 
             return Command.SINGLE_SUCCESS;
         } catch (Exception e) {
