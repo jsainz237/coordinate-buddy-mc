@@ -21,11 +21,18 @@
   "entrypoints": {
     "main": [
       "com.jsainz.coordinate.buddy.CoordinateBuddy"
+    ],
+    "cardinal-components": [
+      "com.jsainz.coordinate.buddy.MyComponents"
     ]
   },
-  "mixins": [
-    "cb.mixins.json"
-  ],
+  "mixins": [],
+
+  "custom": {
+    "cardinal-components": [
+      "cb:world"
+    ]
+  },
 
   "depends": {
     "fabricloader": ">=0.11.3",

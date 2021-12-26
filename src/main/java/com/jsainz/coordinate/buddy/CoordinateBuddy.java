@@ -1,15 +1,14 @@
 package com.jsainz.coordinate.buddy;
 
 import com.jsainz.coordinate.buddy.utils.CBCommand;
-import com.jsainz.coordinate.buddy.utils.PlayerEntityExt;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.minecraft.command.argument.ArgumentTypes;
 import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.MessageType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -17,6 +16,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.World;
 
 import java.util.Collection;
 import java.util.EnumSet;
@@ -35,20 +35,25 @@ public class CoordinateBuddy implements ModInitializer {
                     .literal(TOP_LEVEL_COMMAND)
                     .build();
 
-            LiteralCommandNode<ServerCommandSource> meCommand = CBCommand.me.builder
+            LiteralCommandNode<ServerCommandSource> meCommand = CommandManager.literal("me")
                     .executes(ctx -> broadcastCoordinates(ctx.getSource()))
                     .build();
 
-            LiteralCommandNode<ServerCommandSource> helpCommand = CBCommand.help.builder
+            LiteralCommandNode<ServerCommandSource> helpCommand = CommandManager.literal("help")
                     .executes(ctx -> showCommands(cbCommand, dispatcher, ctx.getSource()))
                     .build();
 
-            LiteralCommandNode<ServerCommandSource> setHomeCommand = CBCommand.setHome.builder
+            LiteralCommandNode<ServerCommandSource> homeCommand = CommandManager.literal("home")
+                    .build();
+
+            LiteralCommandNode<ServerCommandSource> setHomeCommand = CommandManager.literal("set")
                     .executes(ctx -> setHomeCoordinates(ctx.getSource()))
                     .build();
 
-            LiteralCommandNode<ServerCommandSource> getHomeCommand = CBCommand.getHome.builder
-                    .then(argument("player", EntityArgumentType.players()))
+            LiteralCommandNode<ServerCommandSource> getHomeCommand = CommandManager.literal("get")
+                    .build();
+
+            LiteralCommandNode<ServerCommandSource> getMyHomeCommand = CommandManager.literal("me")
                     .executes(ctx -> getPlayerHomeCoordinates(ctx.getSource()))
                     .build();
 
@@ -56,8 +61,11 @@ public class CoordinateBuddy implements ModInitializer {
 
             cbCommand.addChild(meCommand);
             cbCommand.addChild(helpCommand);
-            cbCommand.addChild(setHomeCommand);
-            cbCommand.addChild(getHomeCommand);
+            cbCommand.addChild(homeCommand);
+
+            homeCommand.addChild(setHomeCommand);
+            homeCommand.addChild(getHomeCommand);
+            getHomeCommand.addChild(getMyHomeCommand);
         });
     }
 
@@ -115,41 +123,37 @@ public class CoordinateBuddy implements ModInitializer {
         return Command.SINGLE_SUCCESS;
     }
 
-    public static int setHomeCoordinates(ServerCommandSource source) throws CommandSyntaxException {
+    public static int setHomeCoordinates(ServerCommandSource source) {
         try {
-            final ServerPlayerEntity player = source.getPlayer();
+            World worldProvider = source.getWorld();
+            String playerName = source.getPlayer().getDisplayName().getString();
+            MyComponents.CBWORLD.get(worldProvider).setHomeCoordinates(playerName, getPlayerCoords(source));
 
-            if (!(player instanceof PlayerEntity)) {
-                throw new Exception("Player is not valid PlayerEntity");
-            }
-
-            final String coords = getPlayerCoords(source);
-            ((PlayerEntityExt) player).setHomeCoordinates(coords);
-            player.sendMessage(new LiteralText("Home coordinates set: " + coords), false);
+            source.getPlayer().sendMessage(
+                    new LiteralText("Home coordinates set: " + getPlayerCoords(source)),
+                    false
+            );
 
             return Command.SINGLE_SUCCESS;
-        } catch (Exception e) {
-            if(e instanceof CommandSyntaxException) {
-                throw (CommandSyntaxException) e;
-            }
+        } catch(Exception e) {
             e.printStackTrace();
             return 0;
         }
     }
 
-    public static int getPlayerHomeCoordinates(ServerCommandSource source) throws CommandSyntaxException {
-//        final List<ServerPlayerEntity> playerList = source.getServer().getPlayerManager().getPlayerList();
-//
-//        for(ServerPlayerEntity player: playerList) {
-//            System.out.println(player.getDisplayName());
-//        }
+    public static int getPlayerHomeCoordinates(ServerCommandSource source) {
+        try {
+            final ServerPlayerEntity player = source.getPlayer();
+            World worldProvider = source.getWorld();
+            final String playerHomeCoords = MyComponents.CBWORLD.get(worldProvider).getPlayerHomeCoordinates(player.getDisplayName().getString());
 
-        final ServerPlayerEntity player = source.getPlayer();
-        final String coordinates = ((PlayerEntityExt) player).getHomeCoordinates();
+            final LiteralText message = new LiteralText(player.getDisplayName().getString() + "'s home: " + playerHomeCoords);
+            player.sendMessage(message, false);
 
-        final LiteralText message = new LiteralText(player.getDisplayName().getString() + "'s home: " + coordinates);
-        player.sendMessage(message, false);
-
-        return Command.SINGLE_SUCCESS;
+            return Command.SINGLE_SUCCESS;
+        } catch(Exception e) {
+            e.printStackTrace();
+            return 0;
+        }
     }
 }
