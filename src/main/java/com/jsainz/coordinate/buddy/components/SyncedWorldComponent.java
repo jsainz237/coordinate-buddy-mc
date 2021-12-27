@@ -48,6 +48,11 @@ public final class SyncedWorldComponent implements WorldComponent, AutoSyncedCom
         return this.coordinates.keySet().toArray(new String[0]);
     }
 
+    @Override
+    public void clearPlayerHomeCoordinates(String playerName) {
+        this.coordinates.remove(playerName);
+    }
+
 
     @Override
     public void readFromNbt(NbtCompound tag) {
