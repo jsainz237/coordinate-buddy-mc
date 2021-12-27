@@ -1,9 +1,11 @@
 package com.jsainz.coordinate.buddy.components;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.jsainz.coordinate.buddy.MyComponents;
 import com.jsainz.coordinate.buddy.utils.WorldComponent;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.onyxstudios.cca.api.v3.component.sync.AutoSyncedComponent;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.world.World;
@@ -20,7 +22,12 @@ public final class SyncedWorldComponent implements WorldComponent, AutoSyncedCom
 
     @Override
     public String getPlayerHomeCoordinates(String playerName) {
-        return coordinates.get(playerName).getAsString();
+        final JsonElement coords = coordinates.get(playerName);
+        if(coords == null) {
+            return null;
+        }
+
+        return coords.getAsString();
     }
 
     @Override
@@ -33,9 +40,9 @@ public final class SyncedWorldComponent implements WorldComponent, AutoSyncedCom
     }
 
     @Override
-    public String[] getAllSavedPlayerNames() throws Exception {
+    public String[] getAllSavedPlayerNames() {
         if(this.coordinates == null) {
-            throw new Exception("No player home coordinates set");
+            return new String[0];
         }
 
         return this.coordinates.keySet().toArray(new String[0]);

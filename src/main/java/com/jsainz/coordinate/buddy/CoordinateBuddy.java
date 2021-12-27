@@ -1,14 +1,15 @@
 package com.jsainz.coordinate.buddy;
 
-import com.jsainz.coordinate.buddy.utils.CBCommand;
+import com.jsainz.coordinate.buddy.suggesters.PlayerSuggestionProvider;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
-import net.minecraft.command.argument.ArgumentTypes;
-import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.command.suggestion.SuggestionProviders;
 import net.minecraft.network.MessageType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -21,12 +22,14 @@ import net.minecraft.world.World;
 import java.util.Collection;
 import java.util.EnumSet;
 
+import static com.mojang.brigadier.arguments.StringArgumentType.word;
 import static com.mojang.brigadier.builder.RequiredArgumentBuilder.argument;
 
 public class CoordinateBuddy implements ModInitializer {
 
     public static final String MOD_ID = "cb";
     private static final String TOP_LEVEL_COMMAND = "cb";
+    private static final SuggestionProvider<ServerCommandSource> playerSuggestions = new PlayerSuggestionProvider();
 
     @Override
     public void onInitialize() {
@@ -54,8 +57,25 @@ public class CoordinateBuddy implements ModInitializer {
                     .build();
 
             LiteralCommandNode<ServerCommandSource> getMyHomeCommand = CommandManager.literal("me")
-                    .executes(ctx -> getPlayerHomeCoordinates(ctx.getSource()))
+                    .executes(ctx -> {
+                        final String playerName = ctx.getSource().getPlayer().getDisplayName().getString();
+                        final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
+                        ctx.getSource().getPlayer().sendMessage(message, false);
+                        return Command.SINGLE_SUCCESS;
+                    })
                     .build();
+
+            ArgumentCommandNode<ServerCommandSource, String> getPlayerHomeCommand = CommandManager.argument("player", word())
+                    .suggests(playerSuggestions)
+                    .executes(ctx -> {
+                        final String playerName = ctx.getArgument("player", String.class);
+                        final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
+                        ctx.getSource().getPlayer().sendMessage(message, false);
+                        return Command.SINGLE_SUCCESS;
+                    })
+                    .build();
+
+
 
             dispatcher.getRoot().addChild(cbCommand);
 
@@ -66,6 +86,7 @@ public class CoordinateBuddy implements ModInitializer {
             homeCommand.addChild(setHomeCommand);
             homeCommand.addChild(getHomeCommand);
             getHomeCommand.addChild(getMyHomeCommand);
+            getHomeCommand.addChild(getPlayerHomeCommand);
         });
     }
 
@@ -141,19 +162,14 @@ public class CoordinateBuddy implements ModInitializer {
         }
     }
 
-    public static int getPlayerHomeCoordinates(ServerCommandSource source) {
-        try {
-            final ServerPlayerEntity player = source.getPlayer();
-            World worldProvider = source.getWorld();
-            final String playerHomeCoords = MyComponents.CBWORLD.get(worldProvider).getPlayerHomeCoordinates(player.getDisplayName().getString());
+    public static LiteralText getPlayerHomeCoordinates(String playerName, ServerCommandSource source) {
+        World worldProvider = source.getWorld();
+        final String playerHomeCoords = MyComponents.CBWORLD.get(worldProvider).getPlayerHomeCoordinates(playerName);
 
-            final LiteralText message = new LiteralText(player.getDisplayName().getString() + "'s home: " + playerHomeCoords);
-            player.sendMessage(message, false);
-
-            return Command.SINGLE_SUCCESS;
-        } catch(Exception e) {
-            e.printStackTrace();
-            return 0;
+        if(playerHomeCoords == null) {
+            return new LiteralText(playerName + " has no saved home coordinates :(\nUse the '/cb home set' command to set your home coordinates!");
         }
+
+        return new LiteralText(playerName + "'s home: " + playerHomeCoords);
     }
 }
