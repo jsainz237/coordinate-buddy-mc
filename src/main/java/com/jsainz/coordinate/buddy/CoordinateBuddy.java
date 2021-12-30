@@ -1,8 +1,10 @@
 package com.jsainz.coordinate.buddy;
 
+import com.jsainz.coordinate.buddy.suggesters.LocationSuggestionProvider;
 import com.jsainz.coordinate.buddy.suggesters.PlayerSuggestionProvider;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
@@ -13,10 +15,7 @@ import net.minecraft.network.MessageType;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.LiteralText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.text.*;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
@@ -31,7 +30,9 @@ public class CoordinateBuddy implements ModInitializer {
 
     public static final String MOD_ID = "cb";
     private static final String TOP_LEVEL_COMMAND = "cb";
+
     private static final SuggestionProvider<ServerCommandSource> playerSuggestions = new PlayerSuggestionProvider();
+    private static final SuggestionProvider<ServerCommandSource> locationSuggestions = new LocationSuggestionProvider();
 
     @Override
     public void onInitialize() {
@@ -51,23 +52,50 @@ public class CoordinateBuddy implements ModInitializer {
             LiteralCommandNode<ServerCommandSource> homeCommand = CommandManager.literal("home")
                     .build();
 
+            LiteralCommandNode<ServerCommandSource> communityCommand = CommandManager.literal("community")
+                    .build();
+
+            LiteralCommandNode<ServerCommandSource> setCommunityCommand = CommandManager.literal("set")
+                    .requires(source -> source.hasPermissionLevel(4))
+                    .then(CommandManager.argument("location name", word())
+                        .executes(ctx -> setCommunityCoordinates(ctx))
+                    ).build();
+
+            LiteralCommandNode<ServerCommandSource> getCommunityCommand = CommandManager.literal("get")
+                    .then(CommandManager.argument("location", word())
+                        .suggests(locationSuggestions)
+                        .executes(ctx -> getCommunityCoordinates(ctx))
+                    ).build();
+
+            LiteralCommandNode<ServerCommandSource> clearCommunityCommand = CommandManager.literal("clear")
+                    .requires(source -> source.hasPermissionLevel(4))
+                    .executes(ctx -> clearCommunityCoordinates(ctx))
+                    .build();
+
             LiteralCommandNode<ServerCommandSource> setHomeCommand = CommandManager.literal("set")
                     .executes(ctx -> setHomeCoordinates(ctx.getSource()))
                     .build();
 
             LiteralCommandNode<ServerCommandSource> getHomeCommand = CommandManager.literal("get")
+                    .then(CommandManager.literal("me")
+                        .executes(ctx -> {
+                            final String playerName = ctx.getSource().getPlayer().getDisplayName().getString();
+                            final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
+                            ctx.getSource().getPlayer().sendMessage(message, false);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                    )
+                    .then(CommandManager.argument("player", word())
+                        .suggests(playerSuggestions)
+                        .executes(ctx -> {
+                            final String playerName = ctx.getArgument("player", String.class);
+                            final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
+                            ctx.getSource().getPlayer().sendMessage(message, false);
+                            return Command.SINGLE_SUCCESS;
+                        }))
                     .build();
 
-            LiteralCommandNode<ServerCommandSource> getMyHomeCommand = CommandManager.literal("me")
-                    .executes(ctx -> {
-                        final String playerName = ctx.getSource().getPlayer().getDisplayName().getString();
-                        final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
-                        ctx.getSource().getPlayer().sendMessage(message, false);
-                        return Command.SINGLE_SUCCESS;
-                    })
-                    .build();
-
-            LiteralCommandNode<ServerCommandSource> clearHomeCommand = CommandManager.literal("reset")
+            LiteralCommandNode<ServerCommandSource> clearHomeCommand = CommandManager.literal("clear")
                     .executes(ctx -> {
                         final String playerName = ctx.getSource().getPlayer().getDisplayName().getString();
                         clearPlayerHomeCoordinates(playerName, ctx.getSource());
@@ -75,30 +103,20 @@ public class CoordinateBuddy implements ModInitializer {
                     })
                     .build();
 
-            ArgumentCommandNode<ServerCommandSource, String> getPlayerHomeCommand = CommandManager.argument("player", word())
-                    .suggests(playerSuggestions)
-                    .executes(ctx -> {
-                        final String playerName = ctx.getArgument("player", String.class);
-                        final LiteralText message = getPlayerHomeCoordinates(playerName, ctx.getSource());
-                        ctx.getSource().getPlayer().sendMessage(message, false);
-                        return Command.SINGLE_SUCCESS;
-                    })
-                    .build();
-
-
-
             dispatcher.getRoot().addChild(cbCommand);
 
             cbCommand.addChild(meCommand);
             cbCommand.addChild(helpCommand);
             cbCommand.addChild(homeCommand);
+            cbCommand.addChild(communityCommand);
 
             homeCommand.addChild(setHomeCommand);
             homeCommand.addChild(getHomeCommand);
             homeCommand.addChild(clearHomeCommand);
 
-            getHomeCommand.addChild(getMyHomeCommand);
-            getHomeCommand.addChild(getPlayerHomeCommand);
+            communityCommand.addChild(setCommunityCommand);
+            communityCommand.addChild(getCommunityCommand);
+            communityCommand.addChild(clearCommunityCommand);
         });
     }
 
@@ -193,9 +211,10 @@ public class CoordinateBuddy implements ModInitializer {
             if(playerName.equals(currPlayerName)) {
                 final LiteralText helpMessage = (LiteralText) new LiteralText("\nUse the '/cb home set' command to set your home coordinates")
                         .setStyle(Style.EMPTY.withColor(Formatting.WHITE));
-                final LiteralText commandMessage = (LiteralText) new LiteralText("\n[Set home coordinates?]")
+                final LiteralText commandMessage = (LiteralText) new LiteralText("\n[Set home]")
                     .setStyle(Style.EMPTY
                             .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/cb home set"))
+                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new LiteralText("Set your home coordinates?")))
                             .withColor(Formatting.GREEN)
                     );
 
@@ -221,5 +240,37 @@ public class CoordinateBuddy implements ModInitializer {
                 new LiteralText(playerName + "'s home coordinates have been removed!");
 
         source.getPlayer().sendMessage(message, false);
+    }
+
+    public static int setCommunityCoordinates(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
+        final String locationName = ctx.getArgument("location name", String.class);
+        final String coords = getPlayerCoords(ctx.getSource());
+
+        MyComponents.CBWORLD.get(ctx.getSource().getWorld()).setCommunityCoords(locationName, coords);
+
+        final LiteralText message = new LiteralText(locationName + " set for community: " + coords);
+        ctx.getSource().getPlayer().sendMessage(message, false);
+
+        return Command.SINGLE_SUCCESS;
+    }
+
+    public static int getCommunityCoordinates(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
+        final String location = ctx.getArgument("location", String.class);
+        final String coords = MyComponents.CBWORLD.get(ctx.getSource().getWorld()).getCommunityCoords(location);
+
+        final LiteralText message = new LiteralText(location + ": " + coords);
+        ctx.getSource().getPlayer().sendMessage(message, false);
+
+        return Command.SINGLE_SUCCESS;
+    }
+
+    public static int clearCommunityCoordinates(CommandContext<ServerCommandSource> ctx) throws CommandSyntaxException {
+        final String location = ctx.getArgument("location", String.class);
+        MyComponents.CBWORLD.get(ctx.getSource().getWorld()).clearCommunityCoords(location);
+
+        final LiteralText message = new LiteralText("Coordinates for " + location + " has been removed!");
+        ctx.getSource().getPlayer().sendMessage(message, false);
+
+        return Command.SINGLE_SUCCESS;
     }
 }
