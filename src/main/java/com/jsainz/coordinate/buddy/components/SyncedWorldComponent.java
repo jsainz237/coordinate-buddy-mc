@@ -91,10 +91,14 @@ public final class SyncedWorldComponent implements WorldComponent, AutoSyncedCom
     @Override
     public void readFromNbt(NbtCompound tag) {
         final String homeJsonStr = tag.getString(HOME_KEY);
-        this.homeCoordinates = (JsonObject) JsonParser.parseString(homeJsonStr);
+        if(homeJsonStr != null) {
+            this.homeCoordinates = (JsonObject) JsonParser.parseString(homeJsonStr);
+        }
 
         final String communityJsonStr = tag.getString(COMMUNITY_KEY);
-        this.communityCoordinates = (JsonObject) JsonParser.parseString(communityJsonStr);
+        if(communityJsonStr != null) {
+            this.communityCoordinates = (JsonObject) JsonParser.parseString(communityJsonStr);
+        }
     }
 
     @Override
